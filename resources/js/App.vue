@@ -1,20 +1,31 @@
 <template>
     <div class="chat-bot container">
+        <h4>Product Helper Bot</h4>
         <ul class="collection with-header chat-display">
-            <li class="collection-header"><h4>Product Helper Bot</h4></li>
             <li
                 class="collection-item"
                 v-for="(message, index) in conversation"
                 :key="index"
             >
-                <span
+                <div v-if="message.isProduct" class="product-details">
+                    <div><strong>Product:</strong> {{ message.text.name }}</div>
+                    <div>
+                        <strong>Description:</strong>
+                        {{ message.text.description }}
+                    </div>
+                    <div><strong>Color:</strong> {{ message.text.color }}</div>
+                    <div><strong>Size:</strong> {{ message.text.size }}</div>
+                    <div><strong>Price:</strong> {{ message.text.price }}</div>
+                </div>
+                <div
+                    v-else
                     :class="{
                         'user-message': message.sender === 'user',
                         'bot-message': message.sender === 'bot',
                     }"
                 >
                     {{ message.text }}
-                </span>
+                </div>
             </li>
         </ul>
         <div class="input-field">
@@ -41,10 +52,23 @@ const sendQuery = async () => {
     conversation.value.push({ text: userQuery, sender: "user" });
     userInput.value = "";
 
-    // Dummy Axios request (replace with actual API endpoint later)
     try {
-        const response = await axios.post('/api/chatbot', { query: userQuery });
+        const response = await axios.post("/api/chatbot", { query: userQuery });
+
+        // Add the reply text to the conversation
         conversation.value.push({ text: response.data.reply, sender: "bot" });
+
+        // Add formatted product details to the conversation
+        if (response.data.products && response.data.products.length > 0) {
+            const productDetails = formatProductDetails(response.data.products);
+            productDetails.forEach((detail) => {
+                conversation.value.push({
+                    text: detail,
+                    sender: "bot",
+                    isProduct: true,
+                });
+            });
+        }
     } catch (error) {
         console.error("API request failed:", error);
         conversation.value.push({
@@ -52,6 +76,18 @@ const sendQuery = async () => {
             sender: "bot",
         });
     }
+};
+
+const formatProductDetails = (products) => {
+    return products.map((product) => {
+        return {
+            name: product.name,
+            description: product.description || "No description available",
+            color: product.color,
+            size: product.size,
+            price: product.price,
+        };
+    });
 };
 </script>
 
@@ -61,7 +97,7 @@ const sendQuery = async () => {
     margin: 20px auto;
 }
 .chat-display {
-    height: 300px;
+    height: 1000px;
     overflow-y: auto;
     border: 1px solid #ddd;
     padding: 10px;
@@ -73,5 +109,13 @@ const sendQuery = async () => {
 .bot-message {
     text-align: left;
     font-style: italic;
+}
+.product-details {
+    text-align: left;
+    margin: 10px 0;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background-color: #f5f5f5;
 }
 </style>

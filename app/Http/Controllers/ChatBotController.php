@@ -26,11 +26,14 @@ class ChatBotController extends Controller
 
         $structuredResponse = $parseResult->choices[0]->message->content;
 
+        Log::debug($structuredResponse);
+
         $responseArray = json_decode($structuredResponse, true);
 
         $color = null;
         $priceOperator = null;
         $priceValue = null;
+        $size = null;
 
         foreach ($responseArray as $subArray) {
             if (isset($subArray['color']) || isset($subArray['colour'])) {
@@ -52,7 +55,7 @@ class ChatBotController extends Controller
 
         $responseText = $this->formatResponse($productRecommendations);
 
-        return response()->json(['reply' => $responseText]);
+        return response()->json($responseText);
 
     }
 
@@ -64,7 +67,7 @@ class ChatBotController extends Controller
 
         // Apply color filter on ProductVariant
         if ($color) {
-            $query->where('product_variants.color', $color);
+            $query->where('product_variants.color', 'like', '%'.$color.'%');
         }
 
         if ($size) {
@@ -78,14 +81,33 @@ class ChatBotController extends Controller
         }
 
         // Select columns from both tables as needed
-        return $query->get(['products.name', 'product_variants.color', 'product_variants.size', 'product_variants.price']);
+        return $query->get(['products.name', 'products.description', 'product_variants.color', 'product_variants.size', 'product_variants.price']);
     }
 
     protected function formatResponse($productRecommendations)
     {
-        return $productRecommendations->map(function ($product) {
-            return "Product: {$product->name} \nDescription: {$product->description} \nColor: {$product->color} \nSize: {$product->size} \nPrice: {$product->price}";
-        })->implode("\n\n");
+        $replyText = '';
+        $productsArray = [];
+
+        if ($productRecommendations->isEmpty()) {
+            $replyText = 'Sorry, we could not find any products matching your criteria.';
+        } else {
+            $replyText = 'Here are the products that match your criteria:';
+            $productsArray = $productRecommendations->map(function ($product) {
+                return [
+                    'name' => $product->name,
+                    'description' => $product->description,
+                    'color' => $product->color,
+                    'size' => $product->size,
+                    'price' => $product->price
+                ];
+            })->all();
+        }
+
+        return [
+            'reply' => $replyText,
+            'products' => $productsArray
+        ];
     }
 
     protected function convertToNumericPrice($string)
