@@ -76,7 +76,6 @@ class ChatBotController extends Controller
 
         // Apply price filter on ProductVariant
         if ($numericPrice) {
-            Log::debug('here' . $priceOperator . $numericPrice);
             $query->where('product_variants.price', $priceOperator, $numericPrice);
         }
 

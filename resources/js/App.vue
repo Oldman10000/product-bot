@@ -68,14 +68,18 @@ const sendQuery = async () => {
                     isProduct: true,
                 });
             });
+        } else {
+            // No products found - provide a suggestion
+            const suggestion = generateSuggestion(userQuery);
+            conversation.value.push({ text: suggestion, sender: "bot" });
         }
     } catch (error) {
         console.error("API request failed:", error);
-        conversation.value.push({
-            text: "Sorry, I could not process your request.",
-            sender: "bot",
-        });
     }
+};
+
+const generateSuggestion = (userQuery) => {
+    return "Not sure what you're looking for? Try searching for a product category, color, size, or price range.";
 };
 
 const formatProductDetails = (products) => {
