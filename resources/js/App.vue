@@ -27,6 +27,9 @@
                     {{ message.text }}
                 </div>
             </li>
+            <li v-if="isLoading" class="collection-item loading-message">
+                Loading...
+            </li>
         </ul>
         <div class="input-field">
             <input
@@ -46,8 +49,10 @@ import axios from "axios";
 
 const userInput = ref("");
 const conversation = ref([]);
+const isLoading = ref(false);
 
 const sendQuery = async () => {
+    isLoading.value = true;
     const userQuery = userInput.value;
     conversation.value.push({ text: userQuery, sender: "user" });
     userInput.value = "";
@@ -75,6 +80,8 @@ const sendQuery = async () => {
         }
     } catch (error) {
         console.error("API request failed:", error);
+    } finally {
+        isLoading.value = false;
     }
 };
 
