@@ -15,7 +15,7 @@ class ChatBotController extends Controller
         $yourApiKey = getenv('CHATGPT_API_KEY');
         $client = OpenAI::client($yourApiKey);
 
-        $structuredPrompt = "Analyze the following customer query and return the identified product attributes in a structured JSON format. The format should be an array of objects, like this example: [{color: 'blue'}, {price: {operator: '>', value: '5'}}] The main fields to check are price, colour, size: \"$userQuery\"";
+        $structuredPrompt = "Analyze the following customer query and return any identified potential product names along with other product attributes in a structured JSON format. Example: [{product_name: 'handbag'}, {color: 'blue'}, {price: {operator: '>', value: '5'}}]. Query: \"$userQuery\"";
 
         $parseResult = $client->chat()->create([
             'model' => 'gpt-3.5-turbo',
@@ -34,24 +34,34 @@ class ChatBotController extends Controller
         $priceOperator = null;
         $priceValue = null;
         $size = null;
+        $productNames = [];
 
-        foreach ($responseArray as $subArray) {
-            if (isset($subArray['color']) || isset($subArray['colour'])) {
-                $color = $subArray['color'] ?? $subArray['colour'] ?? null;
+        if (!empty($responseArray)) {
+            foreach ($responseArray as $subArray) {
+                if (isset($subArray['color']) || isset($subArray['colour'])) {
+                    $color = $subArray['color'] ?? $subArray['colour'] ?? null;
+                }
+                if (isset($subArray['price'])) {
+                    $priceOperator = $subArray['price']['operator'] ?? null;
+                    $priceValue = $subArray['price']['value'] ?? null;
+                }
+                if (isset($subArray['size'])) {
+                    $sizeFullForm = $subArray['size'];
+                    $size = $this->mapSizeToShortForm($sizeFullForm);
+                }
+                if (isset($subArray['product_name'])) {
+                    $productNames[] = $subArray['product_name'];
+                }
             }
-            if (isset($subArray['price'])) {
-                $priceOperator = $subArray['price']['operator'] ?? null;
-                $priceValue = $subArray['price']['value'] ?? null;
-            }
-            if (isset($subArray['size'])) {
-                $sizeFullForm = $subArray['size'];
-                $size = $this->mapSizeToShortForm($sizeFullForm);
-            }
+        } else {
+            return response()->json([
+                'reply' => 'Sorry, we could not understand your query. Please try again.',
+                'products' => []
+            ]);
         }
-
         $numericPrice = $this->convertToNumericPrice($priceValue);
 
-        $productRecommendations = $this->getProductRecommendations($color, $priceOperator, $size, $numericPrice);
+        $productRecommendations = $this->getProductRecommendations($color, $priceOperator, $size, $numericPrice, $productNames);
 
         $responseText = $this->formatResponse($productRecommendations);
 
@@ -59,7 +69,7 @@ class ChatBotController extends Controller
 
     }
 
-    protected function getProductRecommendations($color, $priceOperator, $size, $numericPrice)
+    protected function getProductRecommendations($color, $priceOperator, $size, $numericPrice, $productNames)
     {
         // Start the query by joining Product and ProductVariant tables
         $query = ProductVariant::query()
@@ -67,7 +77,7 @@ class ChatBotController extends Controller
 
         // Apply color filter on ProductVariant
         if ($color) {
-            $query->where('product_variants.color', 'like', '%'.$color.'%');
+            $query->where('product_variants.color', 'like', '%' . $color . '%');
         }
 
         if ($size) {
@@ -77,6 +87,16 @@ class ChatBotController extends Controller
         // Apply price filter on ProductVariant
         if ($numericPrice) {
             $query->where('product_variants.price', $priceOperator, $numericPrice);
+        }
+
+        // Apply product name filter on Product
+        if (!empty($productNames)) {
+            $query->where(function ($subQuery) use ($productNames) {
+                foreach ($productNames as $name) {
+                    $subQuery->orWhere('products.name', 'LIKE', '%' . $name . '%')
+                        ->orWhere('products.description', 'LIKE', '%' . $name . '%');
+                }
+            });
         }
 
         // Select columns from both tables as needed
